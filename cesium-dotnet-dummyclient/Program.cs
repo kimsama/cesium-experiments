@@ -1,35 +1,47 @@
-﻿using System;
-using System.Net.WebSockets;
-using System.Text;
-using System.Threading;
+﻿using SocketIOClient;
+using System;
 using System.Threading.Tasks;
 
 class Program
 {
   static async Task Main(string[] args)
   {
-    using var ws = new ClientWebSocket();
-    await ws.ConnectAsync(new Uri("ws://localhost:4000/socket.io/?EIO=3&transport=websocket"), CancellationToken.None);
+    var client = new SocketIOClient.SocketIO("http://localhost:4000");
+    await client.ConnectAsync();
 
-    Console.WriteLine("Connected to the server");
+    Console.WriteLine("Please enter the GPS location in the format 'latitude, longitude'. For example: 37.80195697601734, -122.41674617751681");
+    Console.WriteLine("To exit the program, type 'exit'.");
 
-    double lat = 37.79968433190998;
-    double lon = -122.42585293207298;
-
-    for (int i = 0; i < 6; i++)
+    while (true)
     {
-      var latitude = lat + i * 0.1; // Example latitude
-      var longitude = lon + i * 0.1; // Example longitude
-      var gpsData = Encoding.UTF8.GetBytes($"42[\"gpsPosition\",{{\"latitude\":{latitude},\"longitude\":{longitude}}}]");
+      var input = Console.ReadLine(); // Receive user input
 
-      await ws.SendAsync(new ArraySegment<byte>(gpsData), WebSocketMessageType.Text, true, CancellationToken.None);
+      if (string.Equals(input, "exit", StringComparison.OrdinalIgnoreCase))
+      {
+        Console.WriteLine("Exiting the program.");
+        break; // Exit if 'exit' is entered
+      }
 
-      Console.WriteLine($"Sent GPS position: {latitude}, {longitude}");
+      var parts = input.Split(','); // Split input by comma
+      if (parts.Length != 2)
+      {
+        Console.WriteLine("Incorrect format. Please try again.");
+        continue; // Request new input if the format is incorrect
+      }
 
-      await Task.Delay(10000); // Wait for 10 seconds
+      if (double.TryParse(parts[0].Trim(), out double latitude) &&
+          double.TryParse(parts[1].Trim(), out double longitude))
+      {
+        // Send GPS location data to the server
+        await client.EmitAsync("gpsPosition", new { latitude, longitude });
+        Console.WriteLine($"Location sent: Latitude {latitude}, Longitude {longitude}");
+      }
+      else
+      {
+        Console.WriteLine("The number format is incorrect. Please try again.");
+      }
     }
 
-    await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None);
-    Console.WriteLine("Disconnected from the server");
+    await client.DisconnectAsync();
   }
 }
