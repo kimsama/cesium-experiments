@@ -9,25 +9,49 @@
 <body>
     <div id="cesiumContainer" style="width: 100%; height: 100vh;"></div>
     <script>
-        const viewer = new Cesium.Viewer('cesiumContainer', {
-            terrainProvider: Cesium.createWorldTerrain()
-        });
+    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJmODU2NDMyNy0yNDA2LTQwNzQtOGY1Yi1lYWQzOWQ0OTM1YTQiLCJpZCI6MjA0OTc1LCJpYXQiOjE3MTE2MDI0NDR9.Mt6nwYfLzDW7e0432RiWvXBl72JBUuJGyOFV18oRWls'
+    const viewer = new Cesium.Viewer('cesiumContainer', {
+        terrainProvider: Cesium.createWorldTerrain(),
+    });
 
-        const socket = io('http://localhost:4000');
+    // Set up Socket.IO client to connect to your server
+    const socket = io('http://localhost:4000');
 
-        const entity = viewer.entities.add({
-            position: Cesium.Cartesian3.fromDegrees(0, 0),
-            point: {
-                pixelSize: 10,
-                color: Cesium.Color.RED,
-            },
-        });
+    // Create an entity with a path that we will update
+    const entity = viewer.entities.add({
+        // Define the path graphics for the entity
+        path: new Cesium.PathGraphics({
+            leadTime: 0, // Time ahead of the entity position to show the path
+            trailTime: 60, // Time behind the entity position to show the path
+            width: 2,
+            material: new Cesium.PolylineGlowMaterialProperty({
+                glowPower: 0.3,
+                color: Cesium.Color.YELLOW
+            }),
+        })
+    });
 
-        socket.on('gpsPosition', function(data) {
-            const position = Cesium.Cartesian3.fromDegrees(data.longitude, data.latitude);
-            entity.position = position;
-            viewer.scene.requestRender();
-        });
+    // Initialize an empty array to store positions
+    let positions = [];
+
+    // Listen for GPS position updates from the server
+    socket.on('gpsPosition', function(data) {
+        const position = Cesium.Cartesian3.fromDegrees(data.longitude, data.latitude);
+        positions.push(position);
+
+        // Update the entity's position to the latest point
+        entity.position = new Cesium.CallbackProperty(function() {
+            return positions[positions.length - 1];
+        }, false);
+
+        // Update the path's positions
+        entity.path.positions = new Cesium.CallbackProperty(function() {
+            return positions;
+        }, false);
+
+        // Optionally, adjust the viewer to keep the moving entity in view
+        viewer.scene.requestRender();
+    });
     </script>
 </body>
 </html>
