@@ -9,66 +9,52 @@
 <body>
     <div id="cesiumContainer" style="width: 100%; height: 100vh;"></div>
     <script>
-    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJmODU2NDMyNy0yNDA2LTQwNzQtOGY1Yi1lYWQzOWQ0OTM1YTQiLCJpZCI6MjA0OTc1LCJpYXQiOjE3MTE2MDI0NDR9.Mt6nwYfLzDW7e0432RiWvXBl72JBUuJGyOFV18oRWls'
-    const viewer = new Cesium.Viewer('cesiumContainer', {
-        terrainProvider: Cesium.createWorldTerrain(),
-    });
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJmODU2NDMyNy0yNDA2LTQwNzQtOGY1Yi1lYWQzOWQ0OTM1YTQiLCJpZCI6MjA0OTc1LCJpYXQiOjE3MTE2MDI0NDR9.Mt6nwYfLzDW7e0432RiWvXBl72JBUuJGyOFV18oRWls';
 
-     // Define the rectangle boundaries for San Francisco area
-    // West, South, East, North in degrees
-    const sanFranciscoRectangle = Cesium.Rectangle.fromDegrees(-122.5149, 37.7081, -122.3574, 37.8324);
+        // Initialize the Cesium Viewer in the div with the ID 'cesiumContainer'
+        const viewer = new Cesium.Viewer("cesiumContainer");
+        viewer.clock.shouldAnimate = true; // Enable clock animation
 
-    // Set the camera view to the San Francisco rectangle
-    viewer.camera.setView({
-        destination: sanFranciscoRectangle,
-        orientation: {
-            heading: Cesium.Math.toRadians(0), // East, default value
-            pitch: Cesium.Math.toRadians(-15), // looking downwards
-            roll: 0.0
-        }
-    });
 
-    // Optional: Adjust the camera height for better visibility
-    viewer.camera.zoomOut(1000);   
+        // Initialize socket.io client
+        const socket = io('http://localhost:4000'); // Adjust the URL as needed
+         
+        const startLatitude = 37.80089545694181;
+        const startLongitude = -122.43190204818632;
 
-    // Set up Socket.IO client to connect to your server
-    const socket = io('http://localhost:4000');
+        // Array to store the GPS coordinates starting with the initial start point
+        let pathCoordinates = [startLongitude, startLatitude];
 
-    // Create an entity with a path that we will update
-    const entity = viewer.entities.add({
-        // Define the path graphics for the entity
-        path: new Cesium.PathGraphics({
-            leadTime: 0, // Time ahead of the entity position to show the path
-            trailTime: 60, // Time behind the entity position to show the path
-            width: 2,
-            material: new Cesium.PolylineGlowMaterialProperty({
-                glowPower: 0.3,
-                color: Cesium.Color.YELLOW
-            }),
-        })
-    });
+        // Add a dynamic polyline to the scene
+        const isConstant = false; // dynamic
+        const redLine = viewer.entities.add({
+            polyline: {
+                // Dynamically update positions
+                positions: new Cesium.CallbackProperty(function (time, result) {
+                    return Cesium.Cartesian3.fromDegreesArray(
+                      pathCoordinates,
+                      Cesium.Ellipsoid.WGS84,
+                      result
+                  );
+                }, isConstant),
+                width: 5,
+                material: Cesium.Color.RED,
+            },
+        });
 
-    // Initialize an empty array to store positions
-    let positions = [];
+        // Listen for GPS position updates from the server
+        socket.on('gpsPosition', function(data) {
+            if(data && data.latitude && data.longitude) {
 
-    // Listen for GPS position updates from the server
-    socket.on('gpsPosition', function(data) {
-        const position = Cesium.Cartesian3.fromDegrees(data.longitude, data.latitude);
-        positions.push(position);
+                // Append the new position to the pathCoordinates array
+                pathCoordinates.push(data.longitude, data.latitude);
 
-        // Update the entity's position to the latest point
-        entity.position = new Cesium.CallbackProperty(function() {
-            return positions[positions.length - 1];
-        }, false);
+                console.log(`Received GPS position: Latitude ${data.latitude}, Longitude ${data.longitude}`);
+            }
+        });
 
-        // Update the path's positions
-        entity.path.positions = new Cesium.CallbackProperty(function() {
-            return positions;
-        }, false);
-
-        // Optionally, adjust the viewer to keep the moving entity in view
-        viewer.scene.requestRender();
-    });
-    </script>
+        // Focus the viewer on the polyline
+        viewer.zoomTo(viewer.entities);
+  </script>
 </body>
 </html>
