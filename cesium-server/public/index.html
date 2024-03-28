@@ -14,6 +14,23 @@
         terrainProvider: Cesium.createWorldTerrain(),
     });
 
+     // Define the rectangle boundaries for San Francisco area
+    // West, South, East, North in degrees
+    const sanFranciscoRectangle = Cesium.Rectangle.fromDegrees(-122.5149, 37.7081, -122.3574, 37.8324);
+
+    // Set the camera view to the San Francisco rectangle
+    viewer.camera.setView({
+        destination: sanFranciscoRectangle,
+        orientation: {
+            heading: Cesium.Math.toRadians(0), // East, default value
+            pitch: Cesium.Math.toRadians(-15), // looking downwards
+            roll: 0.0
+        }
+    });
+
+    // Optional: Adjust the camera height for better visibility
+    viewer.camera.zoomOut(1000);   
+
     // Set up Socket.IO client to connect to your server
     const socket = io('http://localhost:4000');
 
