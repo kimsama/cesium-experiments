@@ -1,6 +1,6 @@
-./cesium-server/node_modules
-node_modules
-obj
-.vs
-bin
 x64
+.vs
+node_modules
+Debug
+Release
+obj
