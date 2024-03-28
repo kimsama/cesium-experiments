@@ -4,6 +4,9 @@ using System.Threading.Tasks;
 
 class Program
 {
+  /// <summary>
+  /// input GPS location and send it to the server
+  /// </summary>
   static async Task Main(string[] args)
   {
     var client = new SocketIOClient.SocketIO("http://localhost:4000");
