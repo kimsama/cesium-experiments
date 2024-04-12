@@ -3,23 +3,21 @@
 <head>
     <title>Cesium Demo</title>
     <script src="https://cesium.com/downloads/cesiumjs/releases/1.82/Build/Cesium/Cesium.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
     <link href="https://cesium.com/downloads/cesiumjs/releases/1.82/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
 </head>
 <body>
     <div id="cesiumContainer" style="width: 100%; height: 100vh;"></div>
     <script>
-        Cesium.Ion.defaultAccessToken = '<your-access-token-here>';
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJhODM2MmM2NS03MzhhLTRhYjAtYTY2Mi00MDkxMTBhNTcxZmUiLCJpZCI6MjA0OTc1LCJpYXQiOjE3MTE2MTgzMTZ9.q3AIhkbrEbCUroMcfdha17XSqvkOM3HwGpi2XcxquzE'; 
 
         // Initialize the Cesium Viewer in the div with the ID 'cesiumContainer'
         const viewer = new Cesium.Viewer("cesiumContainer");
         viewer.clock.shouldAnimate = true; // Enable clock animation
 
+        // Initialize WebSocket client
+        const socket = new WebSocket('ws://localhost:4000');
 
-        // Initialize socket.io client
-        const socket = io('http://localhost:4000'); // Adjust the URL as needed
-         
         const startLatitude = 37.80089545694181;
         const startLongitude = -122.43190204818632;
 
@@ -33,10 +31,10 @@
                 // Dynamically update positions
                 positions: new Cesium.CallbackProperty(function (time, result) {
                     return Cesium.Cartesian3.fromDegreesArray(
-                      pathCoordinates,
-                      Cesium.Ellipsoid.WGS84,
-                      result
-                  );
+                        pathCoordinates,
+                        Cesium.Ellipsoid.WGS84,
+                        result
+                    );
                 }, isConstant),
                 width: 5,
                 material: Cesium.Color.RED,
@@ -44,18 +42,20 @@
         });
 
         // Listen for GPS position updates from the server
-        socket.on('gpsPosition', function(data) {
-            if(data && data.latitude && data.longitude) {
-
+        socket.onmessage = function(event) {
+            const message = JSON.parse(event.data);
+            if (message.type === 'gpsPosition' && message.data) {
+                const data = message.data;
                 // Append the new position to the pathCoordinates array
                 pathCoordinates.push(data.longitude, data.latitude);
 
                 console.log(`Received GPS position: Latitude ${data.latitude}, Longitude ${data.longitude}`);
             }
-        });
+        };
 
         // Focus the viewer on the polyline
         viewer.zoomTo(viewer.entities);
-  </script>
+    </script>
+
 </body>
 </html>
