@@ -20,44 +20,45 @@ class websocket_client
 {
 public:
   websocket_client(net::io_context& ioc)
-    : resolver_(net::make_strand(ioc)), 
-      ws_(net::make_strand(ioc))
+    : _resolver(net::make_strand(ioc)), 
+      _ws(net::make_strand(ioc))
   {}
 
   void connect(const std::string& host, const std::string& port) 
   {
-    resolver_.async_resolve(host, port,
+    _resolver.async_resolve(host, port,
       beast::bind_front_handler(&websocket_client::on_resolve, this));
   }
 
-  void send(const std::string& message) 
+  void send(const std::string& message)
   {
-    std::lock_guard<std::mutex> lock(mutex_);
-    message_queue_.push_back(message);
-    if (!write_in_progress_) {
-      start_sending();
-    }
+    // The specified handler is scheduled for execution as thread-safe manner. 
+    net::post(_ws.get_executor(),
+      beast::bind_front_handler(&websocket_client::on_send, this, message));
   }
 
 private:
-  tcp::resolver resolver_;
-  websocket::stream<beast::tcp_stream> ws_;
-  std::deque<std::string> message_queue_;
+  tcp::resolver _resolver;
+  websocket::stream<beast::tcp_stream> _ws;
+  std::deque<std::string> _message_queue;
 
   // Flag to track if a read/write operation is in progress
-  bool read_in_progress_ = false;
-  bool write_in_progress_ = false;
+  bool _ready_to_read = false;
+  bool _write_in_progress = false;
 
   // Buffer for incoming messages
   beast::flat_buffer buffer_;  
-  std::mutex mutex_;
 
-  void start_sending() 
+  void on_send(const std::string& message)
   {
-    if (!message_queue_.empty() && !write_in_progress_) 
+    if (_write_in_progress)
     {
-      write_in_progress_ = true;
-      ws_.async_write(net::buffer(message_queue_.front()),
+      _message_queue.push_back(message);
+    }
+    else
+    {
+      _write_in_progress = true;
+      _ws.async_write(net::buffer(message),
         beast::bind_front_handler(&websocket_client::on_write, this));
     }
   }
@@ -66,7 +67,7 @@ private:
   {
     if (ec) return fail(ec, "resolve");
 
-    ws_.next_layer().async_connect(*results.begin(),
+    _ws.next_layer().async_connect(*results.begin(),
       beast::bind_front_handler(&websocket_client::on_connect, this));
   }
 
@@ -74,7 +75,7 @@ private:
   {
     if (ec) return fail(ec, "connect");
 
-    ws_.async_handshake("localhost", "/",
+    _ws.async_handshake("localhost", "/",
       beast::bind_front_handler(&websocket_client::on_handshake, this));
   }
 
@@ -86,23 +87,24 @@ private:
     send(std::string(R"({"type": "handshake", "data": "Hello"})"));
 
     // Initiate the first read operation
-    read_in_progress_ = true;
-    ws_.async_read(buffer_,
+    _ready_to_read = true;
+    _ws.async_read(buffer_,
       beast::bind_front_handler(&websocket_client::on_read, this));
   }
 
-  void on_write(beast::error_code ec, std::size_t bytes_transferred) 
+  void on_write(beast::error_code ec, std::size_t bytes_transferred)
   {
     if (ec) return fail(ec, "write");
 
+    _write_in_progress = false;
+
+    if (!_message_queue.empty())
     {
-      std::lock_guard<std::mutex> lock(mutex_);
-      message_queue_.pop_front();
-      write_in_progress_ = false;
+      _write_in_progress = true;
+      _ws.async_write(net::buffer(_message_queue.front()),
+        beast::bind_front_handler(&websocket_client::on_write, this));
+      _message_queue.pop_front();
     }
-
-    start_sending();
-
   }
 
   void on_read(beast::error_code ec, std::size_t bytes_transferred) 
@@ -110,17 +112,17 @@ private:
     if (ec) return fail(ec, "read");
 
     // Mark the read operation as completed
-    read_in_progress_ = false; 
+    _ready_to_read = false; 
 
     std::cout << "Received: " << beast::make_printable(buffer_.data()) << std::endl;
     // Clear the buffer
     buffer_.consume(buffer_.size()); 
 
     // Initiate a new read operation if one is not already in progress
-    if (!read_in_progress_)
+    if (!_ready_to_read)
     {
-      read_in_progress_ = true;
-      ws_.async_read(buffer_,
+      _ready_to_read = true;
+      _ws.async_read(buffer_,
         beast::bind_front_handler(&websocket_client::on_read, this));
     }
   }
