@@ -30,6 +30,14 @@ wss.on('connection', (ws) => {
           }
         });
       }
+
+      if (message.type === 'handshake') {
+        console.log('Received handshake: ', message.data);
+
+        // Acknowledge the received message
+        const response = { type: 'ack', data: 'Handshake received' };
+        ws.send(JSON.stringify(response));
+      }
     } 
     catch (error) {
       console.error('Error parsing JSON message: ', error);
