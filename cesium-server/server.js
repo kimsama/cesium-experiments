@@ -14,20 +14,27 @@ wss.on('connection', (ws) => {
   console.log('New client connected');
 
   ws.on('message', (data) => {
-    const message = JSON.parse(data);
-    if (message.type === 'gpsPosition') {
-      console.log('Received GPS position: ', message.data);
+    try {
+      const message = JSON.parse(data);
+      if (message.type === 'gpsPosition') {
+        console.log('Received GPS position: ', message.data);
 
-      // Acknowledge the received message
-      const response = { type: 'ack', data: 'Position received' };
-      ws.send(JSON.stringify(response));
+        // Acknowledge the received message
+        const response = { type: 'ack', data: 'Position received' };
+        ws.send(JSON.stringify(response));
 
-      // Broadcast to all clients including Cesium
-      wss.clients.forEach(function each(client) {
-        if (client !== ws && client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify({ type: 'gpsPosition', data: message.data }));
-        }
-      });
+        // Broadcast to all clients including Cesium
+        wss.clients.forEach(function each(client) {
+          if (client !== ws && client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: 'gpsPosition', data: message.data }));
+          }
+        });
+      }
+    } 
+    catch (error) {
+      console.error('Error parsing JSON message: ', error);
+      // optionally send an error message to the client
+      ws.send(JSON.stringify({ type: 'error', data: 'Invalid JSON' }));
     }
   });
 
