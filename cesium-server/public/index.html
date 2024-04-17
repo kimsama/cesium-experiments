@@ -9,7 +9,7 @@
 <body>
     <div id="cesiumContainer" style="width: 100%; height: 100vh;"></div>
     <script>
-        Cesium.Ion.defaultAccessToken = '<YOUR_CESIUM_ION_ACCESS_TOKEN>'; // Replace with your Cesium Ion access token.
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIwYjA1NTYzZS04YTQ3LTQzZGQtODA4Zi0wYjkyNzE4M2MzOTgiLCJpZCI6MjA0OTc1LCJpYXQiOjE3MTI4OTAyMzd9.nGn6Unaf-TY5fhmxS5FSXidVHun14lutLpYjClUnYDw'; // Replace with your Cesium Ion access token.
 
         // Initialize the Cesium Viewer in the div with the ID 'cesiumContainer'
         const viewer = new Cesium.Viewer("cesiumContainer");
@@ -46,10 +46,16 @@
             const message = JSON.parse(event.data);
             if (message.type === 'gpsPosition' && message.data) {
                 const data = message.data;
-                // Append the new position to the pathCoordinates array
-                pathCoordinates.push(data.longitude, data.latitude);
-
-                console.log(`Received GPS position: Latitude ${data.latitude}, Longitude ${data.longitude}`);
+                if (typeof data.latitude === "number" && 
+                    typeof data.longitude === "number" &&
+                    data.latitude >= -90 && data.latitude <= 90 &&
+                    data.longitude >= -180 && data.longitude <= 180) {
+                        pathCoordinates.push(data.longitude, data.latitude);
+                        console.log(`Received GPS position: Latitude ${data.latitude}, Longitude ${data.longitude}`);
+                } 
+                else {
+                  console.error("Invalid GPS data received", data);
+                }
             }
         };
 

@@ -2,48 +2,22 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
-
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// Serve static files from the public directory
+// asynchroneous message processing one at a time
+const messageQueue = [];
+let isProcessing = false;
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 wss.on('connection', (ws) => {
   console.log('New client connected');
 
   ws.on('message', (data) => {
-    try {
-      const message = JSON.parse(data);
-      if (message.type === 'gpsPosition') {
-        console.log('Received GPS position: ', message.data);
-
-        // Acknowledge the received message
-        const response = { type: 'ack', data: 'Position received' };
-        ws.send(JSON.stringify(response));
-
-        // Broadcast to all clients including Cesium
-        wss.clients.forEach(function each(client) {
-          if (client !== ws && client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ type: 'gpsPosition', data: message.data }));
-          }
-        });
-      }
-
-      if (message.type === 'handshake') {
-        console.log('Received handshake: ', message.data);
-
-        // Acknowledge the received message
-        const response = { type: 'ack', data: 'Handshake received' };
-        ws.send(JSON.stringify(response));
-      }
-    } 
-    catch (error) {
-      console.error('Error parsing JSON message: ', error);
-      // optionally send an error message to the client
-      ws.send(JSON.stringify({ type: 'error', data: 'Invalid JSON' }));
-    }
+    messageQueue.push(data);
+    processMessages(ws);
   });
 
   ws.on('close', () => {
@@ -51,7 +25,55 @@ wss.on('connection', (ws) => {
   });
 });
 
-// Add a route that redirects to the index.html file
+async function processMessages(ws) {
+  if (isProcessing) return;
+  isProcessing = true;
+
+  while (messageQueue.length > 0) {
+    const data = messageQueue.shift();
+    try {
+      const message = JSON.parse(data);
+      await handleMessage(ws, message);
+    } catch (error) {
+      console.error('Error handling message: ', error);
+      ws.send(JSON.stringify({ type: 'error', data: 'Invalid JSON' }));
+    }
+  }
+
+  isProcessing = false;
+}
+
+async function handleMessage(ws, message) {
+  console.log(`Received ${message.type}: `, message.data);
+  const response = { type: 'ack', data: `${message.type} received` };
+  ws.send(JSON.stringify(response));
+
+  if (message.type === 'gpsPosition') {
+    await broadcastMessage(ws, message);
+  }
+}
+
+async function broadcastMessage(ws, message) {
+  const broadcastPromises = [];
+  wss.clients.forEach(client => {
+    if (client !== ws && client.readyState === WebSocket.OPEN) {
+      broadcastPromises.push(new Promise((resolve, reject) => {
+        client.send(JSON.stringify({ type: 'gpsPosition', data: message.data }), (error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      }));
+    }
+  });
+
+  try {
+    await Promise.all(broadcastPromises);
+    console.log('Broadcast completed');
+  } catch (error) {
+    console.error('Error broadcasting message: ', error);
+  }
+}
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
